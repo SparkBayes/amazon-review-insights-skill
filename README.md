@@ -1,6 +1,6 @@
 # Amazon Review Insights
 
-AI-powered Amazon review analysis tool for Claude Code agents.
+AI-powered Amazon review analysis tool for AI agents. Recommended for use on OpenClaw.
 
 ## Features
 

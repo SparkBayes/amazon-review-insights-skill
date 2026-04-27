@@ -1,6 +1,6 @@
 # Amazon Review Insights
 
-亚马逊评论智能分析工具，专为 Claude Code 代理设计。
+亚马逊评论智能分析工具，适用于所有 AI agent。推荐在 OpenClaw 上使用。
 
 ## 功能特性
 
