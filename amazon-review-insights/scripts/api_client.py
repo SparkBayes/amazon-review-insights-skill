@@ -182,31 +182,44 @@ class CustomerInsightsClient:
         """Get AI insights"""
         return self._post("/api/v1/external/analysis/insights", {"task_id": task_id})
 
-    def get_tag_categories(self, task_id: str) -> Dict[str, Any]:
-        """Get tag distribution"""
-        return self._post("/api/v1/external/analysis/tags", {"task_id": task_id})
-
-    def get_issue_statistics(self, task_id: str) -> Dict[str, Any]:
-        """Get issue dimension statistics"""
-        return self._post(
-            "/api/v1/external/analysis/issue-statistics", {"task_id": task_id}
-        )
-
-    def get_top_issues(self, task_id: str) -> Dict[str, Any]:
-        """Get top issues distribution"""
-        return self._post("/api/v1/external/analysis/top-issues", {"task_id": task_id})
-
     def get_basic_statistics(self, task_id: str) -> Dict[str, Any]:
         """Get basic statistics"""
         return self._post("/api/v1/external/analysis/statistics", {"task_id": task_id})
 
+    def get_representative_reviews(
+        self, task_id: str, polarity: str = "negative", limit: int = 5
+    ) -> Dict[str, Any]:
+        """Get representative reviews"""
+        return self._post(
+            "/api/v1/external/analysis/representative-reviews",
+            {"task_id": task_id, "polarity": polarity, "limit": limit},
+        )
+
+    def get_sentiment_reviews(
+        self, task_id: str, polarity: str = "negative", page: int = 1, page_size: int = 20
+    ) -> Dict[str, Any]:
+        """Get sentiment reviews list - supports polarity parameter"""
+        return self._post(
+            "/api/v1/external/analysis/sentiment-reviews",
+            {"task_id": task_id, "polarity": polarity, "page": page, "page_size": page_size},
+        )
+
     def get_negative_reviews(
         self, task_id: str, page: int = 1, page_size: int = 20
     ) -> Dict[str, Any]:
-        """Get negative reviews list"""
+        """Get negative reviews list (backward compatible, defaults to polarity=negative)"""
         return self._post(
-            "/api/v1/external/analysis/negative-reviews",
-            {"task_id": task_id, "page": page, "page_size": page_size},
+            "/api/v1/external/analysis/sentiment-reviews",
+            {"task_id": task_id, "polarity": "negative", "page": page, "page_size": page_size},
+        )
+
+    def get_category_tag_distribution(
+        self, task_id: str, polarity: str = "negative"
+    ) -> Dict[str, Any]:
+        """Get category-tag distribution - three-level nested structure"""
+        return self._post(
+            f"/api/v1/external/analysis/category-tag-distribution/{task_id}",
+            {"polarity": polarity},
         )
 
     def get_trend(
@@ -255,19 +268,19 @@ class CustomerInsightsClient:
         normalized_tag: str = None,
         category: str = None,
         dimension: str = None,
-        issue_type: str = None,
+        polarity: str = "negative",
         page: int = 1,
         page_size: int = 20,
     ) -> Dict[str, Any]:
-        """Get comments associated with tag/issue
+        """Get comments associated with tag/category
 
         Args:
             task_id: Task ID
-            association_type: Association type, "tag" or "issue"
+            association_type: Association type, "tag" or "category"
             normalized_tag: Normalized tag name (tag mode)
-            category: Tag category (tag mode)
-            dimension: Issue dimension (issue mode)
-            issue_type: Issue type (issue mode)
+            category: Tag category (tag/category mode)
+            dimension: Dimension (category mode)
+            polarity: Sentiment filter (category mode): negative/positive/all
             page: Page number
             page_size: Items per page
         """
@@ -283,8 +296,8 @@ class CustomerInsightsClient:
             data["category"] = category
         if dimension:
             data["dimension"] = dimension
-        if issue_type:
-            data["issue_type"] = issue_type
+        if polarity:
+            data["polarity"] = polarity
         return self._post("/api/v1/external/analysis/related-comments", data)
 
     # ==================== Account Management ====================
@@ -309,7 +322,7 @@ def create_parser() -> argparse.ArgumentParser:
         "--action",
         "-a",
         required=True,
-        help="Action to execute: get_download_links, check_device, create_task, get_task_detail, get_task_list, create_incremental, get_ai_insights, get_tag_categories, get_issue_statistics, get_top_issues, get_basic_statistics, get_negative_reviews, get_trend, get_comments, get_comments_overview, get_points",
+        help="Action to execute: get_download_links, check_device, create_task, get_task_detail, get_task_list, create_incremental, trigger_analysis, get_ai_insights, get_basic_statistics, get_representative_reviews, get_category_tag_distribution, get_negative_reviews, get_trend, get_related_comments, get_comments, get_comments_overview, get_points",
     )
 
     # Action parameters
@@ -341,7 +354,7 @@ def create_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--association-type", default="tag",
-        help="Association type: tag/issue (get_related_comments)"
+        help="Association type: tag/category (get_related_comments)"
     )
     parser.add_argument(
         "--normalized-tag", default=None, help="Normalized tag name (get_related_comments, tag mode)"
@@ -350,10 +363,13 @@ def create_parser() -> argparse.ArgumentParser:
         "--category", default=None, help="Tag category (get_related_comments, tag mode)"
     )
     parser.add_argument(
-        "--dimension", default=None, help="Issue dimension (get_related_comments, issue mode)"
+        "--dimension", default=None, help="Dimension (get_related_comments, category mode)"
     )
     parser.add_argument(
-        "--issue-type", default=None, help="Issue type (get_related_comments, issue mode)"
+        "--polarity", default=None, help="Sentiment filter (get_representative_reviews, get_related_comments)"
+    )
+    parser.add_argument(
+        "--limit", type=int, default=5, help="Number of items to return (get_representative_reviews)"
     )
 
     return parser
@@ -442,29 +458,24 @@ def execute(params: dict) -> dict:
                 return err
             return {"status": "success", "output": client.get_ai_insights(task_id)}
 
-        elif action == "get_tag_categories":
-            task_id, err = _require_task_id(params)
-            if err:
-                return err
-            return {"status": "success", "output": client.get_tag_categories(task_id)}
-
-        elif action == "get_issue_statistics":
-            task_id, err = _require_task_id(params)
-            if err:
-                return err
-            return {"status": "success", "output": client.get_issue_statistics(task_id)}
-
-        elif action == "get_top_issues":
-            task_id, err = _require_task_id(params)
-            if err:
-                return err
-            return {"status": "success", "output": client.get_top_issues(task_id)}
-
         elif action == "get_basic_statistics":
             task_id, err = _require_task_id(params)
             if err:
                 return err
             return {"status": "success", "output": client.get_basic_statistics(task_id)}
+
+        elif action == "get_representative_reviews":
+            task_id, err = _require_task_id(params)
+            if err:
+                return err
+            return {
+                "status": "success",
+                "output": client.get_representative_reviews(
+                    task_id,
+                    polarity=params.get("polarity", "negative"),
+                    limit=params.get("limit", 5),
+                ),
+            }
 
         elif action == "get_negative_reviews":
             task_id, err = _require_task_id(params)
@@ -528,7 +539,7 @@ def execute(params: dict) -> dict:
                     normalized_tag=params.get("normalized_tag"),
                     category=params.get("category"),
                     dimension=params.get("dimension"),
-                    issue_type=params.get("issue_type"),
+                    polarity=params.get("polarity"),
                     page=params.get("page", 1),
                     page_size=params.get("page_size", 20),
                 ),
@@ -570,7 +581,8 @@ def main():
         "normalized_tag": args.normalized_tag,
         "category": args.category,
         "dimension": args.dimension,
-        "issue_type": args.issue_type,
+        "polarity": args.polarity,
+        "limit": args.limit,
     }
 
     result = execute(params)
@@ -705,45 +717,6 @@ def create_incremental(task_id: str, api_key: Optional[str] = None) -> Dict[str,
     )
 
 
-def get_tag_categories(task_id: str, api_key: Optional[str] = None) -> Dict[str, Any]:
-    """Convenience function: Get tag distribution"""
-    if api_key is None:
-        api_key = _get_api_key()
-    return execute(
-        {
-            "api_key": api_key,
-            "action": "get_tag_categories",
-            "task_id": task_id,
-        }
-    )
-
-
-def get_issue_statistics(task_id: str, api_key: Optional[str] = None) -> Dict[str, Any]:
-    """Convenience function: Get issue dimension statistics"""
-    if api_key is None:
-        api_key = _get_api_key()
-    return execute(
-        {
-            "api_key": api_key,
-            "action": "get_issue_statistics",
-            "task_id": task_id,
-        }
-    )
-
-
-def get_top_issues(task_id: str, api_key: Optional[str] = None) -> Dict[str, Any]:
-    """Convenience function: Get top issues distribution"""
-    if api_key is None:
-        api_key = _get_api_key()
-    return execute(
-        {
-            "api_key": api_key,
-            "action": "get_top_issues",
-            "task_id": task_id,
-        }
-    )
-
-
 def get_basic_statistics(task_id: str, api_key: Optional[str] = None) -> Dict[str, Any]:
     """Convenience function: Get basic statistics"""
     if api_key is None:
@@ -753,6 +726,26 @@ def get_basic_statistics(task_id: str, api_key: Optional[str] = None) -> Dict[st
             "api_key": api_key,
             "action": "get_basic_statistics",
             "task_id": task_id,
+        }
+    )
+
+
+def get_representative_reviews(
+    task_id: str,
+    polarity: str = "negative",
+    limit: int = 5,
+    api_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Convenience function: Get representative reviews"""
+    if api_key is None:
+        api_key = _get_api_key()
+    return execute(
+        {
+            "api_key": api_key,
+            "action": "get_representative_reviews",
+            "task_id": task_id,
+            "polarity": polarity,
+            "limit": limit,
         }
     )
 
@@ -840,12 +833,12 @@ def get_related_comments(
     normalized_tag: str = None,
     category: str = None,
     dimension: str = None,
-    issue_type: str = None,
+    polarity: str = "negative",
     page: int = 1,
     page_size: int = 20,
     api_key: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Convenience function: Get comments associated with tag/issue"""
+    """Convenience function: Get comments associated with tag/category"""
     if api_key is None:
         api_key = _get_api_key()
     return execute(
@@ -857,7 +850,7 @@ def get_related_comments(
             "normalized_tag": normalized_tag,
             "category": category,
             "dimension": dimension,
-            "issue_type": issue_type,
+            "polarity": polarity,
             "page": page,
             "page_size": page_size,
         }

@@ -189,8 +189,8 @@ python scripts/api_client.py --action get_task_detail --api-key "your-key" --tas
 ```bash
 # AI Insights Summary
 python scripts/api_client.py --action get_ai_insights --api-key "your-key" --task-id "TSK_xxx"
-# Tag Distribution
-python scripts/api_client.py --action get_tag_categories --api-key "your-key" --task-id "TSK_xxx"
+# Category-Tag Distribution
+python scripts/api_client.py --action get_category_tag_distribution --api-key "your-key" --task-id "TSK_xxx"
 # Basic Statistics
 python scripts/api_client.py --action get_basic_statistics --api-key "your-key" --task-id "TSK_xxx"
 # Negative Reviews List
@@ -231,13 +231,12 @@ Status flow: `COLLECTED` → `PROCESSING` → `ANALYZING` → `SUCCESS`
 | get_task_detail | Query task details | --task-id |
 | get_task_list | Get task list | - |
 | get_ai_insights | Get AI insights | --task-id |
-| get_tag_categories | Get tag distribution | --task-id |
-| get_issue_statistics | Get issue dimension statistics | --task-id |
-| get_top_issues | Get top issues distribution | --task-id |
 | get_basic_statistics | Get basic statistics | --task-id |
+| get_representative_reviews | Get representative reviews | --task-id |
+| get_category_tag_distribution | Get category-tag distribution | --task-id |
 | get_negative_reviews | Get negative reviews list | --task-id |
 | get_trend | Get review trends | --task-id |
-| get_related_comments | Get comments associated with tag/issue | --task-id, --association-type |
+| get_related_comments | Get comments associated with tag/category | --task-id, --association-type |
 | get_comments | Get raw comments | --task-id |
 | get_comments_overview | Get comments overview | --task-id |
 | get_points | Query points balance | - |
