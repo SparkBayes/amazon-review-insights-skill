@@ -128,7 +128,9 @@ python scripts/api_client.py --action <action> [--params...]
 python scripts/api_client.py --action check_device --api-key "your-key"
 ```
 
-Response: `{online: true, device_id: "xxx", status: "idle"}`
+Response: `{is_alive: true, endpoint_id: "xxx", endpoint_type: "desktop", status: "idle"}`
+
+> v2.2 field rename: `online → is_alive`, `device_id → endpoint_id`, plus new `endpoint_type`. When offline, `is_alive` is `false` and `endpoint_id / endpoint_type` are `null`.
 
 ### 2. Create Task
 
@@ -227,6 +229,7 @@ Status flow: `COLLECTED` → `PROCESSING` → `ANALYZING` → `SUCCESS`
 | check_device | Check if device is online | - |
 | create_task | Create task | --asin, --site |
 | create_incremental | Incremental fetch | --task-id |
+| rename_task | Rename a task | --task-id, --name |
 | trigger_analysis | Manual trigger analysis | --task-id |
 | get_task_detail | Query task details | --task-id |
 | get_task_list | Get task list | - |

@@ -86,7 +86,11 @@ class CustomerInsightsClient:
     # ==================== Device Management ====================
 
     def check_device_online(self) -> Dict[str, Any]:
-        """Check if device is online"""
+        """Check if the user endpoint is online
+
+        Response (v2.2): {is_alive: bool, endpoint_id: str|None,
+        endpoint_type: str|None, status: str}
+        """
         return self._post("/api/v1/external/device/status", {})
 
     # ==================== Download Management ====================
@@ -123,9 +127,7 @@ class CustomerInsightsClient:
 
     # ==================== Task Management ====================
 
-    def create_task(
-        self, submit_content: str, site: str = "US", platform: str = "amazon", is_auto: bool = True
-    ) -> str:
+    def create_task(self, submit_content: str, site: str = "US", platform: str = "amazon", is_auto: bool = True) -> str:
         """Create task
 
         Args:
@@ -176,6 +178,13 @@ class CustomerInsightsClient:
         """Create incremental fetch for completed task"""
         return self._post("/api/v1/external/task/incremental", {"task_id": task_id})
 
+    def rename_task(self, task_id: str, name: str) -> Dict[str, Any]:
+        """Rename a task (only updates the task name)"""
+        return self._post(
+            "/api/v1/external/task/rename",
+            {"task_id": task_id, "name": name},
+        )
+
     # ==================== Analysis Results ====================
 
     def get_ai_insights(self, task_id: str) -> Dict[str, Any]:
@@ -186,9 +195,7 @@ class CustomerInsightsClient:
         """Get basic statistics"""
         return self._post("/api/v1/external/analysis/statistics", {"task_id": task_id})
 
-    def get_representative_reviews(
-        self, task_id: str, polarity: str = "negative", limit: int = 5
-    ) -> Dict[str, Any]:
+    def get_representative_reviews(self, task_id: str, polarity: str = "negative", limit: int = 5) -> Dict[str, Any]:
         """Get representative reviews"""
         return self._post(
             "/api/v1/external/analysis/representative-reviews",
@@ -204,27 +211,21 @@ class CustomerInsightsClient:
             {"task_id": task_id, "polarity": polarity, "page": page, "page_size": page_size},
         )
 
-    def get_negative_reviews(
-        self, task_id: str, page: int = 1, page_size: int = 20
-    ) -> Dict[str, Any]:
+    def get_negative_reviews(self, task_id: str, page: int = 1, page_size: int = 20) -> Dict[str, Any]:
         """Get negative reviews list (backward compatible, defaults to polarity=negative)"""
         return self._post(
             "/api/v1/external/analysis/sentiment-reviews",
             {"task_id": task_id, "polarity": "negative", "page": page, "page_size": page_size},
         )
 
-    def get_category_tag_distribution(
-        self, task_id: str, polarity: str = "negative"
-    ) -> Dict[str, Any]:
+    def get_category_tag_distribution(self, task_id: str, polarity: str = "negative") -> Dict[str, Any]:
         """Get category-tag distribution - three-level nested structure"""
         return self._post(
             f"/api/v1/external/analysis/category-tag-distribution/{task_id}",
             {"polarity": polarity},
         )
 
-    def get_trend(
-        self, task_id: str, filter_data: str = "30", filter_product: str = "all"
-    ) -> Dict[str, Any]:
+    def get_trend(self, task_id: str, filter_data: str = "30", filter_product: str = "all") -> Dict[str, Any]:
         """Get review trends"""
         return self._post(
             "/api/v1/external/analysis/trend",
@@ -257,9 +258,7 @@ class CustomerInsightsClient:
 
     def get_comments_overview(self, task_id: str) -> Dict[str, Any]:
         """Get comments overview"""
-        return self._post(
-            "/api/v1/external/analysis/comments-overview", {"task_id": task_id}
-        )
+        return self._post("/api/v1/external/analysis/comments-overview", {"task_id": task_id})
 
     def get_related_comments(
         self,
@@ -322,55 +321,39 @@ def create_parser() -> argparse.ArgumentParser:
         "--action",
         "-a",
         required=True,
-        help="Action to execute: get_download_links, check_device, create_task, get_task_detail, get_task_list, create_incremental, trigger_analysis, get_ai_insights, get_basic_statistics, get_representative_reviews, get_category_tag_distribution, get_negative_reviews, get_trend, get_related_comments, get_comments, get_comments_overview, get_points",
+        help="Action to execute: get_download_links, check_device, create_task, get_task_detail, get_task_list, create_incremental, rename_task, trigger_analysis, get_ai_insights, get_basic_statistics, get_representative_reviews, get_category_tag_distribution, get_negative_reviews, get_trend, get_related_comments, get_comments, get_comments_overview, get_points",
     )
 
     # Action parameters
     parser.add_argument("--asin", help="ASIN or product URL (create_task)")
-    parser.add_argument(
-        "--site", default="US", help="Site: US/CA/DE/FR/UK/JP/IT/ES (create_task)"
-    )
+    parser.add_argument("--site", default="US", help="Site: US/CA/DE/FR/UK/JP/IT/ES (create_task)")
     parser.add_argument("--platform", default="amazon", help="Platform (create_task)")
     parser.add_argument(
-        "--is-auto", type=lambda x: x.lower() == "true", default=True,
-        help="Auto mode: true/false. True=auto analysis, False=collection only (create_task)"
+        "--is-auto",
+        type=lambda x: x.lower() == "true",
+        default=True,
+        help="Auto mode: true/false. True=auto analysis, False=collection only (create_task)",
     )
     parser.add_argument(
-        "--task-id", help="Task ID (get_task_detail, create_incremental, trigger_analysis, get_xxx)"
+        "--task-id", help="Task ID (get_task_detail, create_incremental, rename_task, trigger_analysis, get_xxx)"
     )
+    parser.add_argument("--name", help="New task name (rename_task)")
     parser.add_argument("--page", type=int, default=1, help="Page number")
     parser.add_argument("--page-size", type=int, default=20, help="Items per page")
+    parser.add_argument("--filter-data", default="30", help="Data range: 30/60/all (get_trend)")
+    parser.add_argument("--filter-product", default="all", help="Product filter: all/ASIN (get_trend)")
+    parser.add_argument("--filter-star", default="all", help="Rating filter: 1-5/all (get_comments)")
+    parser.add_argument("--filter-verified", default="all", help="Filter verified: all/true/false (get_comments)")
     parser.add_argument(
-        "--filter-data", default="30", help="Data range: 30/60/all (get_trend)"
+        "--association-type", default="tag", help="Association type: tag/category (get_related_comments)"
     )
-    parser.add_argument(
-        "--filter-product", default="all", help="Product filter: all/ASIN (get_trend)"
-    )
-    parser.add_argument(
-        "--filter-star", default="all", help="Rating filter: 1-5/all (get_comments)"
-    )
-    parser.add_argument(
-        "--filter-verified", default="all", help="Filter verified: all/true/false (get_comments)"
-    )
-    parser.add_argument(
-        "--association-type", default="tag",
-        help="Association type: tag/category (get_related_comments)"
-    )
-    parser.add_argument(
-        "--normalized-tag", default=None, help="Normalized tag name (get_related_comments, tag mode)"
-    )
-    parser.add_argument(
-        "--category", default=None, help="Tag category (get_related_comments, tag mode)"
-    )
-    parser.add_argument(
-        "--dimension", default=None, help="Dimension (get_related_comments, category mode)"
-    )
+    parser.add_argument("--normalized-tag", default=None, help="Normalized tag name (get_related_comments, tag mode)")
+    parser.add_argument("--category", default=None, help="Tag category (get_related_comments, tag mode)")
+    parser.add_argument("--dimension", default=None, help="Dimension (get_related_comments, category mode)")
     parser.add_argument(
         "--polarity", default=None, help="Sentiment filter (get_representative_reviews, get_related_comments)"
     )
-    parser.add_argument(
-        "--limit", type=int, default=5, help="Number of items to return (get_representative_reviews)"
-    )
+    parser.add_argument("--limit", type=int, default=5, help="Number of items to return (get_representative_reviews)")
 
     return parser
 
@@ -446,6 +429,15 @@ def execute(params: dict) -> dict:
                 return err
             return {"status": "success", "output": client.create_incremental(task_id)}
 
+        elif action == "rename_task":
+            task_id, err = _require_task_id(params)
+            if err:
+                return err
+            name = params.get("name")
+            if not name:
+                return {"status": "error", "message": "Missing name parameter"}
+            return {"status": "success", "output": client.rename_task(task_id, name)}
+
         elif action == "trigger_analysis":
             task_id, err = _require_task_id(params)
             if err:
@@ -472,8 +464,20 @@ def execute(params: dict) -> dict:
                 "status": "success",
                 "output": client.get_representative_reviews(
                     task_id,
-                    polarity=params.get("polarity", "negative"),
+                    polarity=params.get("polarity") or "negative",
                     limit=params.get("limit", 5),
+                ),
+            }
+
+        elif action == "get_category_tag_distribution":
+            task_id, err = _require_task_id(params)
+            if err:
+                return err
+            return {
+                "status": "success",
+                "output": client.get_category_tag_distribution(
+                    task_id,
+                    polarity=params.get("polarity") or "negative",
                 ),
             }
 
@@ -571,6 +575,7 @@ def main():
         "platform": args.platform,
         "is_auto": args.is_auto,
         "task_id": args.task_id,
+        "name": args.name,
         "page": args.page,
         "page_size": args.page_size,
         "filter_data": args.filter_data,
@@ -593,7 +598,7 @@ def main():
 
 
 def check_device_online(api_key: Optional[str] = None) -> Dict[str, Any]:
-    """Convenience function: Check if device is online"""
+    """Convenience function: Check if the user endpoint is online (CLI action: check_device)"""
     if api_key is None:
         api_key = _get_api_key()
     return execute({"api_key": api_key, "action": "check_device"})
@@ -713,6 +718,20 @@ def create_incremental(task_id: str, api_key: Optional[str] = None) -> Dict[str,
             "api_key": api_key,
             "action": "create_incremental",
             "task_id": task_id,
+        }
+    )
+
+
+def rename_task(task_id: str, name: str, api_key: Optional[str] = None) -> Dict[str, Any]:
+    """Convenience function: Rename a task"""
+    if api_key is None:
+        api_key = _get_api_key()
+    return execute(
+        {
+            "api_key": api_key,
+            "action": "rename_task",
+            "task_id": task_id,
+            "name": name,
         }
     )
 
