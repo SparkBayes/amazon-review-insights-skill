@@ -715,7 +715,6 @@ Get sentiment reviews list — **the same endpoint supports both negative and po
 **⚠️ Positive-side pitfall** (verified 2026-06-23):
 - With `polarity="positive"` the items **may include a few 1★/2★ reviews** — the server side splits by AI sentiment rather than by `review_star` alone
 - Before frequency counts / listing-copy extraction, **filter by `review_star >= 4`**
-- Full V1 self-check + typical usage: see `references/positive-reviews-workflow.md`
 
 **Python Usage**:
 ```python
