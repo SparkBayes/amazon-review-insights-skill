@@ -294,6 +294,44 @@ class CustomerInsightsClient:
             data["polarity"] = polarity
         return self._post("/api/v1/external/analysis/related-comments", data)
 
+
+    # ==================== Product Info ====================
+
+    def get_product_detail(
+        self,
+        task_id: str = None,
+        asin: str = None,
+        site: str = "US",
+    ) -> Dict[str, Any]:
+        """Get full product info (includes bullets / description for secondary analysis).
+
+        Two query modes (pick one):
+        - task_id: query by task, returns all products under that task
+        - asin + site: query a single product directly, no task needed
+          NOTE: the server enforces ownership - the ASIN must appear in one of
+          your tasks, otherwise it returns an error (product data is stored
+          globally per (platform, site, asin)).
+
+        Args:
+            task_id: Task ID (mutually exclusive with asin)
+            asin: Product ASIN (mutually exclusive with task_id)
+            site: Marketplace code, default US
+
+        Returns:
+            Dict with a `products` array; each item has title/brand/rating/
+            rating distribution/category tree/price/bullets/description/
+            A+ images and other full fields.
+        """
+        if not task_id and not asin:
+            raise ValueError("Provide either task_id or asin")
+        data = {}
+        if task_id:
+            data["task_id"] = task_id
+        if asin:
+            data["asin"] = asin
+            data["site"] = site or "US"
+        return self._post("/api/v1/external/product/detail", data)
+
     # ==================== Account Management ====================
 
     def get_points(self) -> int:
@@ -316,7 +354,7 @@ def create_parser() -> argparse.ArgumentParser:
         "--action",
         "-a",
         required=True,
-        help="Action to execute: get_download_links, check_device, create_task, get_task_detail, get_task_list, create_incremental, rename_task, trigger_analysis, get_ai_insights, get_basic_statistics, get_representative_reviews, get_category_tag_distribution, get_negative_reviews, get_trend, get_related_comments, get_comments, get_comments_overview, get_points",
+        help="Action to execute: get_download_links, check_device, create_task, get_task_detail, get_task_list, create_incremental, rename_task, trigger_analysis, get_ai_insights, get_basic_statistics, get_representative_reviews, get_category_tag_distribution, get_negative_reviews, get_trend, get_related_comments, get_comments, get_comments_overview, get_product_detail, get_points",
     )
 
     # Action parameters
@@ -544,6 +582,23 @@ def execute(params: dict) -> dict:
                 ),
             }
 
+        elif action == "get_product_detail":
+            tid = params.get("task_id")
+            asin = params.get("asin")
+            if not tid and not asin:
+                return {
+                    "status": "error",
+                    "message": "Provide task_id or asin (at least one)",
+                }
+            return {
+                "status": "success",
+                "output": client.get_product_detail(
+                    task_id=tid,
+                    asin=asin,
+                    site=params.get("site", "US"),
+                ),
+            }
+
         elif action == "get_points":
             return {
                 "status": "success",
@@ -566,6 +621,7 @@ def main():
         "api_key": args.api_key or _get_api_key(),
         "action": args.action,
         "submit_content": args.asin,
+        "asin": args.asin,
         "site": args.site,
         "platform": args.platform,
         "is_auto": args.is_auto,

@@ -3,7 +3,7 @@ name: amazon-review-insights
 description: Amazon product review intelligence analysis tool for global e-commerce sellers. Core capabilities:fetch Amazon reviews, AI-powered negative review analysis, quantify high-frequency issues, discover hidden negative feedback in 5-star reviews, generate improvement suggestions, track review trends, incremental updates.
 slug: amazon-review-insights
 displayName: amazon-review-insights
-version: 1.2.5
+version: 1.2.6
 summary: Amazon product review intelligence analysis tool for global e-commerce sellers. Fetch Amazon reviews, run AI-powered negative review analysis, quantify high-frequency issues, discover hidden negative feedback in 5-star reviews, generate improvement suggestions, track review trends, and support incremental updates.
 license: MIT-0
 metadata:
@@ -210,7 +210,39 @@ python scripts/api_client.py --action get_negative_reviews --api-key "your-key" 
 
 > Note: Querying completed task results does not deduct points and has no prerequisites.
 
-### 5. Incremental Fetch
+### 5. Get Product Info
+
+Product info is the **contextual foundation** of negative review analysis, especially for "negative review vs. selling points" semantic alignment.
+
+```bash
+# Mode 1: by task (returns all products under that task)
+python scripts/api_client.py --action get_product_detail --api-key "your-key" --task-id "TSK_xxx"
+
+# Mode 2: by ASIN directly (no task needed)
+python scripts/api_client.py --action get_product_detail --api-key "your-key" --asin "B0XXXXXXXX" --site US
+```
+
+**Returned fields** (full, for secondary analysis):
+
+| Category | Fields |
+|------|------|
+| Identity | `asin` / `site` / `product_title` / `brand` / `image_main` |
+| Rating | `rating_average` / `rating_count` / `rating_distribution` (5→1 star %) / `rating_health` |
+| Category | `category_path` / `category_levels` / `category_node_ids` (consistent across languages) / `category_leaf_id` |
+| Price | `price_current` / `price_original` / `price_discount` / `price_off_amount` / `currency` |
+| **Content** | `bullets` (five bullet points) / `product_description` / `has_aplus_content` / `aplus_image_urls` |
+| Status | `availability` / `date_first_available` / `featured_badge` / `is_active` |
+
+**`rating_health` values**: `healthy` (5-star ≥80%) / `polarized` (5-star ≥40% and 1-star ≥10%, average score masks polarization) / `poor` (5-star <40%) / `moderate`.
+
+> ⚠️ **Ownership check**: in ASIN mode, the ASIN must appear in **one of your tasks**, otherwise the server returns
+> `无权访问该商品信息（该 ASIN 不在您的任何任务中）`.
+> Reason: product data is stored globally per `(platform, site, asin)`; without the check, cross-account data leaks would occur.
+>
+> Note: `product_description` may be `null` — this does **not** mean collection failed. Brand-registry sellers
+> often publish image-only descriptions (A+ content); in that case `has_aplus_content=true` and you can present `aplus_image_urls`.
+
+### 6. Incremental Fetch
 
 > Note: Incremental fetch deducts points. Before executing, inform user and wait for confirmation.
 
@@ -220,7 +252,7 @@ python scripts/api_client.py --action get_negative_reviews --api-key "your-key" 
 3. `--action create_incremental --task-id <task_id>`
 4. Poll status (same as create task)
 
-### 6. Manual Trigger Analysis (Collection-only Mode)
+### 7. Manual Trigger Analysis (Collection-only Mode)
 
 Tasks in collection-only mode (`is_auto=false`) stop at COLLECTED status, requiring manual AI analysis trigger:
 
@@ -229,6 +261,39 @@ python scripts/api_client.py --action trigger_analysis --api-key "your-key" --ta
 ```
 
 Status flow: `COLLECTED` → `PROCESSING` → `ANALYZING` → `SUCCESS`
+
+### 8. Positive Review Analysis (`polarity="positive"`)
+
+> Workflow 1-6 above focuses on the negative-review side / AI insights. `scripts/api_client.py` also supports `polarity="positive"` to fetch positive review quotes, representative positive reviews, and positive tag distribution — for listing copy extraction, marketing material libraries, and comparison tables against the negative side.
+
+**Three methods, quick calls**:
+
+```python
+from api_client import CustomerInsightsClient
+
+client = CustomerInsightsClient(api_key="sk_live_...")
+
+# 1. Full positive review quotes (same fields as get_negative_reviews, supports paging)
+pos = client.get_sentiment_reviews(tid, polarity="positive", page=1, page_size=50)
+# Response: {items: [...], total: N, page_max: M, page: 1, page_size: 50}
+
+# 2. Representative positive reviews (ranked by dimension, limit tested ≤ 5)
+rep_pos = client.get_representative_reviews(tid, polarity="positive", limit=5)
+# Response fields: content / title / star / dimension / dimension_name / rank_in_dimension / url
+
+# 3. Positive tag frequency (three-level nesting: dimension → category → tag)
+dist_pos = client.get_category_tag_distribution(tid, polarity="positive")
+# Response: category_tag_distribution.dimensions.{experience|product|service}.categories.{...}.tags
+```
+
+**Equivalence (important)**: `get_negative_reviews` is an alias of `get_sentiment_reviews(polarity="negative")` (see `scripts/api_client.py` source comments). **Do not write two sets** — switch with polarity.
+
+**Typical usage**:
+- **Listing copy**: take quotes from `get_representative_reviews(polarity="positive")` as bullet points, top-5 frequency list as main selling points
+- **Marketing material library**: classify positive quotes into "feature description / emotional resonance / scenario immersion / problem solving"
+- **Negative vs. positive comparison table**: same-dimension polarization detection (e.g., "easy to operate 97 vs. complicated to operate 126" — the app flow is friendly to some users but deters others)
+
+> **⚠️ Must pass the V1 self-check**: ① `polarity="positive"` items may contain 1★/2★ (pitfall #28 — filter by `review_star >= 4` first); ② representative 4★ content may contain hidden negative feedback (pitfall #29); ③ if the negative side missed a P0, scan the positive side again to confirm (subscription / consumables / privacy).
 
 ## All Available Actions
 
@@ -251,6 +316,7 @@ Status flow: `COLLECTED` → `PROCESSING` → `ANALYZING` → `SUCCESS`
 | get_related_comments | Get comments associated with tag/category | --task-id, --association-type |
 | get_comments | Get raw comments | --task-id |
 | get_comments_overview | Get comments overview | --task-id |
+| get_product_detail | Get product info (full fields: title/brand/rating/star distribution/category tree/price/bullets/description/A+ images) | --task-id or --asin(+--site) |
 | get_points | Query points balance | - |
 
 ## Error Handling
@@ -261,12 +327,13 @@ Status flow: `COLLECTED` → `PROCESSING` → `ANALYZING` → `SUCCESS`
 | Error Code | Description | Handling |
 |-----------|-------------|----------|
 | Device offline | `check_device` returns `is_alive=false` (normal response, not an error code) | No collection channel online; guide the user to install/sign in to the browser extension |
-| 1002 | Insufficient points | Prompt user to recharge at https://www.astrmap.com/ |
-| 2001 | Invalid API Key | Check if API Key is correct |
-| 2002 | API Key disabled | Prompt user to create new API Key |
-| 2003 | API Key expired | Prompt user to create new API Key |
-| 2004 | Insufficient permissions | Check API Key permission configuration |
-| 2005 | Request rate exceeded | Prompt user to retry later |
+| Insufficient points | msg contains "积分余额不足" (formerly 1002) | Prompt user to recharge points |
+| Invalid API Key | auth failure msg (formerly 2001) | Check if API Key is correct |
+| API Key disabled | auth failure msg (formerly 2002) | Prompt user to create new API Key |
+| API Key expired | auth failure msg (formerly 2003) | Prompt user to create new API Key |
+| Insufficient permissions | permission msg (formerly 2004) | Check API Key permission configuration |
+| Rate limit exceeded | rate-limit msg (formerly 2005) | Prompt user to retry later |
+| PRODUCT_NOT_ACCESSIBLE | "无权访问该商品信息（该 ASIN 不在您的任何任务中）" | ASIN direct product query requires the ASIN to appear in one of your tasks |
 | InvalidTaskStatus | Task status is not COLLECTED | Only collection-only tasks with COLLECTED status can trigger analysis |
 
 ## Detailed API Documentation
